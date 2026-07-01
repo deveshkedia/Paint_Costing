@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(psql \"postgresql://neondb_owner:npg_3xVQc1JvSRwf@ep-weathered-queen-at74oba6.c-9.us-east-1.aws.neon.tech/neondb?sslmode=require\" -c \"SELECT NOW\\(\\);\")",
+      "Bash(node *)",
+      "Bash(curl -s -X POST http://localhost:3000/api/auth/login -H 'Content-Type: application/json' -d '{\"email\":\"anupam@anupampaints.com\",\"password\":\"changeme123\"}')",
+      "Bash(python3 -m json.tool)",
+      "Bash(git init *)",
+      "Bash(git remote *)",
+      "Bash(git add *)"
+    ]
+  }
+}
