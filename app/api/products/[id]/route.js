@@ -18,7 +18,7 @@ export async function GET(request, { params }) {
   }
 
   const formulationsResult = await query(
-    `SELECT id, customer_name, loss_pct, batch_size_kg, base_packing_id, hardener_packing_id, component_c_packing_id,
+    `SELECT id, customer_name, loss_pct, batch_size_litres, base_packing_id, hardener_packing_id, component_c_packing_id,
             mix_ratio_weight_base, mix_ratio_weight_hard, mix_ratio_weight_c,
             mix_ratio_vol_base, mix_ratio_vol_hard, mix_ratio_vol_c,
             litre_density_kg_per_l, base_litre_density_kg_per_l, hardener_litre_density_kg_per_l, component_c_litre_density_kg_per_l,

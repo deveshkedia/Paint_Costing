@@ -76,7 +76,7 @@ async function createSampleCostings() {
 
       // Create formulation
       const formulationResult = await pool.query(
-        'INSERT INTO formulations (product_id, customer_name, batch_size_kg) VALUES ($1, $2, $3) RETURNING id',
+        'INSERT INTO formulations (product_id, customer_name, batch_size_litres) VALUES ($1, $2, $3) RETURNING id',
         [productId, 'Standard', 100]
       );
       const formulationId = formulationResult.rows[0].id;

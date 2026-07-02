@@ -32,7 +32,7 @@ const SIDE_LABEL = { single: "Recipe", base: "Base", hardener: "Hardener", compo
 const EMPTY_DRAFT = {
   customerName: "",
   lossPct: "0",
-  batchSizeKg: "",
+  batchSizeLitres: "",
   basePackingId: "",
   hardenerPackingId: "",
   componentCPackingId: "",
@@ -101,7 +101,7 @@ export default function ProductDetailPage({ params }) {
   const packType = product?.pack_type;
   const isMultiPack = packType !== "single";
   const isThreePack = packType === "three_pack";
-  const batchSizeNum = parseFloat(draft.batchSizeKg) || 0;
+  const batchSizeNum = parseFloat(draft.batchSizeLitres) || 0;
 
   function rawMaterialPrice(rawMaterialId) {
     const rm = rawMaterials.find((r) => String(r.id) === String(rawMaterialId));
@@ -150,7 +150,7 @@ export default function ProductDetailPage({ params }) {
       }
       return {
         ...d,
-        batchSizeKg: value,
+        batchSizeLitres: value,
         baseLines: recalc(d.baseLines),
         hardenerLines: recalc(d.hardenerLines),
         componentCLines: recalc(d.componentCLines),
@@ -205,65 +205,71 @@ export default function ProductDetailPage({ params }) {
     const loss = parseFloat(draft.lossPct) || 0;
     const totalWithLoss = total * (1 + loss / 100);
 
-    // Packing cost: (cost / container_size) × volume_in_litres / batch_size_kg
-    let packingPerKg = 0;
+    // Packing cost: containers_needed = ceil(batch_size_litres / container_size), then divide by total weight
+    let packingCostBatch = 0;
+    let totalWeightKg = 0;
+    for (const l of draft.baseLines) {
+      if (l.qtyKg) totalWeightKg += parseFloat(l.qtyKg) || 0;
+    }
+    for (const l of draft.hardenerLines) {
+      if (l.qtyKg) totalWeightKg += parseFloat(l.qtyKg) || 0;
+    }
+    for (const l of draft.componentCLines) {
+      if (l.qtyKg) totalWeightKg += parseFloat(l.qtyKg) || 0;
+    }
+
     if (isMultiPack) {
       // Multi-pack: each side's volume based on mix ratio
-      if (batchSizeNum > 0 && blendedDensity > 0) {
+      if (batchSizeNum > 0) {
         const volBase = parseFloat(draft.mixRatioVolBase) || 0;
         const volHard = parseFloat(draft.mixRatioVolHard) || 0;
         const volC = isThreePack ? parseFloat(draft.mixRatioVolC) || 0 : 0;
         const volSum = volBase + volHard + volC;
 
         if (volSum > 0) {
-          const totalVolumeLitres = batchSizeNum / blendedDensity;
-          const baseVolume = (volBase / volSum) * totalVolumeLitres;
-          const hardenerVolume = (volHard / volSum) * totalVolumeLitres;
-          const componentCVolume = isThreePack ? (volC / volSum) * totalVolumeLitres : 0;
+          const baseVolume = (volBase / volSum) * batchSizeNum;
+          const hardenerVolume = (volHard / volSum) * batchSizeNum;
+          const componentCVolume = isThreePack ? (volC / volSum) * batchSizeNum : 0;
 
-          let packingCostBatch = 0;
           if (draft.basePackingId) {
             const p = packingMaterials.find((pm) => String(pm.id) === String(draft.basePackingId));
             if (p) {
               const containerSize = Number(p.container_size_litres) || 1;
-              const costPerLitre = Number(p.cost) / containerSize;
-              packingCostBatch += costPerLitre * baseVolume;
+              const containersNeeded = Math.ceil(baseVolume / containerSize);
+              packingCostBatch += containersNeeded * Number(p.cost);
             }
           }
           if (draft.hardenerPackingId) {
             const p = packingMaterials.find((pm) => String(pm.id) === String(draft.hardenerPackingId));
             if (p) {
               const containerSize = Number(p.container_size_litres) || 1;
-              const costPerLitre = Number(p.cost) / containerSize;
-              packingCostBatch += costPerLitre * hardenerVolume;
+              const containersNeeded = Math.ceil(hardenerVolume / containerSize);
+              packingCostBatch += containersNeeded * Number(p.cost);
             }
           }
           if (isThreePack && draft.componentCPackingId) {
             const p = packingMaterials.find((pm) => String(pm.id) === String(draft.componentCPackingId));
             if (p) {
               const containerSize = Number(p.container_size_litres) || 1;
-              const costPerLitre = Number(p.cost) / containerSize;
-              packingCostBatch += costPerLitre * componentCVolume;
+              const containersNeeded = Math.ceil(componentCVolume / containerSize);
+              packingCostBatch += containersNeeded * Number(p.cost);
             }
           }
-          packingPerKg = packingCostBatch / batchSizeNum;
         }
       }
     } else {
-      // Single-pack: cost_per_litre = cost / container_size, volume = batch_size / density
-      if (batchSizeNum > 0 && parseFloat(draft.litreDensityKgPerL) > 0) {
-        const volumeLitres = batchSizeNum / parseFloat(draft.litreDensityKgPerL);
-        if (draft.basePackingId) {
-          const p = packingMaterials.find((pm) => String(pm.id) === String(draft.basePackingId));
-          if (p) {
-            const containerSize = Number(p.container_size_litres) || 1;
-            const costPerLitre = Number(p.cost) / containerSize;
-            const packingCostBatch = costPerLitre * volumeLitres;
-            packingPerKg = packingCostBatch / batchSizeNum;
-          }
+      // Single-pack: containers_needed = ceil(batch_size_litres / container_size)
+      if (batchSizeNum > 0 && draft.basePackingId) {
+        const p = packingMaterials.find((pm) => String(pm.id) === String(draft.basePackingId));
+        if (p) {
+          const containerSize = Number(p.container_size_litres) || 1;
+          const containersNeeded = Math.ceil(batchSizeNum / containerSize);
+          packingCostBatch = containersNeeded * Number(p.cost);
         }
       }
     }
+
+    const packingPerKg = totalWeightKg > 0 ? packingCostBatch / totalWeightKg : 0;
 
     const nett = totalWithLoss + packingPerKg;
 
@@ -277,11 +283,11 @@ export default function ProductDetailPage({ params }) {
     setDraft((d) => ({
       ...d,
       customerName: extracted.customerName || d.customerName,
-      batchSizeKg: extracted.batchSizeKg ? String(extracted.batchSizeKg) : d.batchSizeKg,
+      batchSizeLitres: extracted.batchSizeLitres ? String(extracted.batchSizeLitres) : d.batchSizeLitres,
       litreDensityKgPerL: !isMultiPack && extracted.litreDensityKgPerL ? String(extracted.litreDensityKgPerL) : d.litreDensityKgPerL,
       baseLitreDensityKgPerL: isMultiPack && extracted.litreDensityKgPerL ? String(extracted.litreDensityKgPerL) : d.baseLitreDensityKgPerL,
       baseLines: extracted.rows.map((r) => {
-        const bs = extracted.batchSizeKg || batchSizeNum;
+        const bs = extracted.batchSizeLitres || batchSizeNum;
         const qtyKg = bs > 0 ? round((r.percent / 100) * bs) : "";
         return { rawMaterialId: String(r.rawMaterialId), percent: String(r.percent), qtyKg: qtyKg !== "" ? String(qtyKg) : "" };
       }),
@@ -308,7 +314,7 @@ export default function ProductDetailPage({ params }) {
           productId: Number(id),
           customerName: draft.customerName,
           lossPct: parseFloat(draft.lossPct) || 0,
-          batchSizeKg: draft.batchSizeKg ? parseFloat(draft.batchSizeKg) : null,
+          batchSizeLitres: draft.batchSizeLitres ? parseFloat(draft.batchSizeLitres) : null,
           basePackingId: draft.basePackingId ? Number(draft.basePackingId) : null,
           hardenerPackingId: draft.hardenerPackingId ? Number(draft.hardenerPackingId) : null,
           componentCPackingId: draft.componentCPackingId ? Number(draft.componentCPackingId) : null,
@@ -448,11 +454,11 @@ export default function ProductDetailPage({ params }) {
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-ink/70 mb-1">Batch size (kg)</label>
+              <label className="block text-xs font-semibold text-ink/70 mb-1">Batch size (litres)</label>
               <input
                 type="number"
-                placeholder="e.g. 500"
-                value={draft.batchSizeKg}
+                placeholder="e.g. 10"
+                value={draft.batchSizeLitres}
                 onChange={(e) => handleBatchSizeChange(e.target.value)}
                 className="w-full border border-ink/20 rounded-md px-3 py-2 text-sm bg-[#FCFBF8]"
               />
@@ -512,10 +518,10 @@ export default function ProductDetailPage({ params }) {
             )}
           </div>
           <p className="text-xs text-ink/50 -mt-2">
-            Packing cost is per batch (one container per side, sized to roughly match the mix ratio) — divided by batch size for the "Nett" per-kg add-on.
+            Packing cost: containers needed = ceil(batch size / container size). Total cost divided by batch weight for the "Nett" per-kg add-on.
           </p>
 
-          {!draft.batchSizeKg && (
+          {!draft.batchSizeLitres && (
             <p className="text-xs text-ochre bg-ochretint border border-ochre/30 rounded-md px-3 py-2">
               Set a batch size above to enable automatic percent ↔ kg conversion on the rows below.
             </p>
@@ -721,7 +727,7 @@ export default function ProductDetailPage({ params }) {
                 <div className="text-left">
                   <p className="font-semibold">{product.name} — {f.customer_name}</p>
                   <p className="text-xs text-ink/50">
-                    Loss {f.loss_pct}%{f.batch_size_kg ? ` · Batch ${f.batch_size_kg} kg` : ""}
+                    Loss {f.loss_pct}%{f.batch_size_litres ? ` · Batch ${f.batch_size_litres} kg` : ""}
                     {" · Created "}{formatDate(f.created_at)}
                   </p>
                 </div>
@@ -742,21 +748,21 @@ export default function ProductDetailPage({ params }) {
                 <div className="border-t border-ink/10 px-4 sm:px-5 py-4 bg-[#FCFBF8]">
                   {/* Batch size box, editable inline */}
                   <div className="bg-tealtint border border-teal/20 rounded-md p-3 mb-3 flex items-center gap-3 flex-wrap">
-                    <label className="text-xs font-semibold text-teal">Batch size (kg):</label>
+                    <label className="text-xs font-semibold text-teal">Batch size (litres):</label>
                     {isAdmin ? (
                       <input
                         type="number"
-                        defaultValue={f.batch_size_kg || ""}
-                        placeholder="e.g. 500"
+                        defaultValue={f.batch_size_litres || ""}
+                        placeholder="e.g. 10"
                         onBlur={(e) => {
-                          if (e.target.value !== String(f.batch_size_kg || "")) handleUpdateField(f.id, "batchSizeKg", e.target.value);
+                          if (e.target.value !== String(f.batch_size_litres || "")) handleUpdateField(f.id, "batchSizeLitres", e.target.value);
                         }}
                         className="w-32 border border-teal/30 rounded-md px-2 py-1.5 text-sm bg-white"
                       />
                     ) : (
-                      <span className="text-sm font-medium">{f.batch_size_kg || "Not set"}</span>
+                      <span className="text-sm font-medium">{f.batch_size_litres || "Not set"}</span>
                     )}
-                    <span className="text-xs text-ink/50">Total finished goods this recipe makes — anchors % ↔ kg.</span>
+                    <span className="text-xs text-ink/50">Total volume this recipe makes — anchors % ↔ kg.</span>
                   </div>
 
                   {/* Density box(es), editable inline — per-side for multi-pack, single for single-pack */}

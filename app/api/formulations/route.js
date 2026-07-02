@@ -7,7 +7,7 @@ import { snapshotFormulationCost } from "../../../lib/costing";
  * Creates a formulation for a product, with its raw material lines, in a
  * single transaction. Body shape:
  * {
- *   productId, customerName, lossPct, batchSizeKg,
+ *   productId, customerName, lossPct, batchSizeLitres,
  *   basePackingId, hardenerPackingId, componentCPackingId,
  *   mixRatioWeightBase, mixRatioWeightHard, mixRatioWeightC,
  *   mixRatioVolBase, mixRatioVolHard, mixRatioVolC,
@@ -17,7 +17,7 @@ import { snapshotFormulationCost } from "../../../lib/costing";
  *   componentCLines: [{ rawMaterialId, qtyKg, percent }, ...]   // only for three-pack
  * }
  * Each line needs at least one of qtyKg/percent — the other is derived
- * server-side from batchSizeKg if missing, as a safety net (the UI keeps
+ * server-side from batchSizeLitres if missing, as a safety net (the UI keeps
  * both in sync live, but this guards direct API use too).
  */
 export async function POST(request) {
@@ -29,7 +29,7 @@ export async function POST(request) {
     productId,
     customerName,
     lossPct,
-    batchSizeKg,
+    batchSizeLitres,
     basePackingId,
     hardenerPackingId,
     componentCPackingId,
@@ -99,7 +99,7 @@ export async function POST(request) {
 
     const formResult = await client.query(
       `INSERT INTO formulations
-        (product_id, customer_name, loss_pct, batch_size_kg, base_packing_id, hardener_packing_id, component_c_packing_id,
+        (product_id, customer_name, loss_pct, batch_size_litres, base_packing_id, hardener_packing_id, component_c_packing_id,
          mix_ratio_weight_base, mix_ratio_weight_hard, mix_ratio_weight_c,
          mix_ratio_vol_base, mix_ratio_vol_hard, mix_ratio_vol_c, litre_density_kg_per_l,
          base_litre_density_kg_per_l, hardener_litre_density_kg_per_l, component_c_litre_density_kg_per_l)
@@ -109,7 +109,7 @@ export async function POST(request) {
         productId,
         customerName.trim(),
         lossPct || 0,
-        batchSizeKg || null,
+        batchSizeLitres || null,
         basePackingId || null,
         isMultiPack ? hardenerPackingId || null : null,
         isThreePack ? componentCPackingId || null : null,
@@ -126,7 +126,7 @@ export async function POST(request) {
       ]
     );
     const formulationId = formResult.rows[0].id;
-    const batchSize = batchSizeKg ? Number(batchSizeKg) : null;
+    const batchSize = batchSizeLitres ? Number(batchSizeLitres) : null;
 
     const side = isMultiPack ? "base" : "single";
     for (const line of baseLines) {

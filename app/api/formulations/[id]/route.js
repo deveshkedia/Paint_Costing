@@ -60,7 +60,7 @@ export async function PUT(request, { params }) {
   const {
     customerName,
     lossPct,
-    batchSizeKg,
+    batchSizeLitres,
     basePackingId,
     hardenerPackingId,
     componentCPackingId,
@@ -86,7 +86,7 @@ export async function PUT(request, { params }) {
     await client.query("BEGIN");
 
     const existing = await client.query(
-      `SELECT f.id, f.batch_size_kg, p.pack_type FROM formulations f JOIN products p ON p.id = f.product_id WHERE f.id = $1`,
+      `SELECT f.id, f.batch_size_litres, p.pack_type FROM formulations f JOIN products p ON p.id = f.product_id WHERE f.id = $1`,
       [id]
     );
     if (existing.rows.length === 0) {
@@ -97,15 +97,15 @@ export async function PUT(request, { params }) {
     const isMultiPack = packType !== "single";
     const isThreePack = packType === "three_pack";
     // Use the newly-provided batch size if given, else fall back to the existing one for line recalculation.
-    const effectiveBatchSize = batchSizeKg !== undefined && batchSizeKg !== null && batchSizeKg !== ""
-      ? Number(batchSizeKg)
-      : existing.rows[0].batch_size_kg ? Number(existing.rows[0].batch_size_kg) : null;
+    const effectiveBatchSize = batchSizeLitres !== undefined && batchSizeLitres !== null && batchSizeLitres !== ""
+      ? Number(batchSizeLitres)
+      : existing.rows[0].batch_size_litres ? Number(existing.rows[0].batch_size_litres) : null;
 
     await client.query(
       `UPDATE formulations
        SET customer_name = COALESCE($1, customer_name),
            loss_pct = COALESCE($2, loss_pct),
-           batch_size_kg = COALESCE($3, batch_size_kg),
+           batch_size_litres = COALESCE($3, batch_size_litres),
            base_packing_id = COALESCE($4, base_packing_id),
            hardener_packing_id = COALESCE($5, hardener_packing_id),
            component_c_packing_id = COALESCE($6, component_c_packing_id),
@@ -125,7 +125,7 @@ export async function PUT(request, { params }) {
       [
         customerName,
         lossPct,
-        batchSizeKg || null,
+        batchSizeLitres || null,
         basePackingId,
         hardenerPackingId,
         componentCPackingId,
