@@ -68,11 +68,14 @@ export default function ProductDetailPage({ params }) {
   const [historyFor, setHistoryFor] = useState(null);
   const [historyData, setHistoryData] = useState(null);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const [draft, setDraft] = useState(EMPTY_DRAFT);
 
   async function load() {
     setLoading(true);
+    setRefreshing(false);
+    setError("");
     try {
       const [productRes, materialsRes, packingRes] = await Promise.all([
         fetch(`/api/products/${id}`),
@@ -92,6 +95,12 @@ export default function ProductDetailPage({ params }) {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
   }
 
   useEffect(() => {
@@ -353,14 +362,19 @@ export default function ProductDetailPage({ params }) {
 
   async function handleUpdateField(fid, field, value) {
     try {
-      await fetch(`/api/formulations/${fid}`, {
+      const res = await fetch(`/api/formulations/${fid}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ [field]: parseFloat(value) || null }),
       });
-      load();
-    } catch {
-      setError("Could not update that field.");
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || `Update failed: ${res.status}`);
+      }
+      await load();
+    } catch (err) {
+      setError(`Could not update field: ${err.message}`);
+      setTimeout(() => setError(""), 5000);
     }
   }
 
@@ -755,13 +769,16 @@ export default function ProductDetailPage({ params }) {
                         defaultValue={f.batch_size_litres || ""}
                         placeholder="e.g. 10"
                         onBlur={(e) => {
-                          if (e.target.value !== String(f.batch_size_litres || "")) handleUpdateField(f.id, "batchSizeLitres", e.target.value);
+                          if (e.target.value !== String(f.batch_size_litres || "")) handleUpdateField(f.id, "batch_size_litres", e.target.value);
                         }}
                         className="w-32 border border-teal/30 rounded-md px-2 py-1.5 text-sm bg-white"
                       />
                     ) : (
                       <span className="text-sm font-medium">{f.batch_size_litres || "Not set"}</span>
                     )}
+                    <button onClick={handleRefresh} disabled={refreshing} className="flex items-center gap-1 text-xs text-teal font-semibold px-2 py-1.5 border border-teal/30 rounded-md hover:bg-teal/5 disabled:opacity-50" title="Refresh cost calculation">
+                      {refreshing ? <Loader2 size={13} className="animate-spin" /> : <History size={13} />} {refreshing ? "Refreshing..." : "Refresh"}
+                    </button>
                     <span className="text-xs text-ink/50">Total volume this recipe makes — anchors % ↔ kg.</span>
                   </div>
 
@@ -774,7 +791,7 @@ export default function ProductDetailPage({ params }) {
                           type="number" step="0.01"
                           defaultValue={f.litre_density_kg_per_l || ""}
                           placeholder="e.g. 0.98"
-                          onBlur={(e) => { if (e.target.value !== String(f.litre_density_kg_per_l || "")) handleUpdateField(f.id, "litreDensityKgPerL", e.target.value); }}
+                          onBlur={(e) => { if (e.target.value !== String(f.litre_density_kg_per_l || "")) handleUpdateField(f.id, "litre_density_kg_per_l", e.target.value); }}
                           className="w-32 border border-teal/30 rounded-md px-2 py-1.5 text-sm bg-white"
                         />
                       ) : (
@@ -790,7 +807,7 @@ export default function ProductDetailPage({ params }) {
                           <span className="text-xs text-ink/60 w-16">Base</span>
                           {isAdmin ? (
                             <input type="number" step="0.01" defaultValue={f.base_litre_density_kg_per_l || ""} placeholder="e.g. 1.2"
-                              onBlur={(e) => { if (e.target.value !== String(f.base_litre_density_kg_per_l || "")) handleUpdateField(f.id, "baseLitreDensityKgPerL", e.target.value); }}
+                              onBlur={(e) => { if (e.target.value !== String(f.base_litre_density_kg_per_l || "")) handleUpdateField(f.id, "base_litre_density_kg_per_l", e.target.value); }}
                               className="w-24 border border-teal/30 rounded-md px-2 py-1.5 text-sm bg-white" />
                           ) : (
                             <span className="text-sm font-medium">{f.base_litre_density_kg_per_l || "Not set"}</span>
@@ -800,7 +817,7 @@ export default function ProductDetailPage({ params }) {
                           <span className="text-xs text-ink/60 w-16">Hardener</span>
                           {isAdmin ? (
                             <input type="number" step="0.01" defaultValue={f.hardener_litre_density_kg_per_l || ""} placeholder="e.g. 0.9"
-                              onBlur={(e) => { if (e.target.value !== String(f.hardener_litre_density_kg_per_l || "")) handleUpdateField(f.id, "hardenerLitreDensityKgPerL", e.target.value); }}
+                              onBlur={(e) => { if (e.target.value !== String(f.hardener_litre_density_kg_per_l || "")) handleUpdateField(f.id, "hardener_litre_density_kg_per_l", e.target.value); }}
                               className="w-24 border border-teal/30 rounded-md px-2 py-1.5 text-sm bg-white" />
                           ) : (
                             <span className="text-sm font-medium">{f.hardener_litre_density_kg_per_l || "Not set"}</span>
@@ -811,7 +828,7 @@ export default function ProductDetailPage({ params }) {
                             <span className="text-xs text-ink/60 w-16">Comp. C</span>
                             {isAdmin ? (
                               <input type="number" step="0.01" defaultValue={f.component_c_litre_density_kg_per_l || ""} placeholder="e.g. 1.0"
-                                onBlur={(e) => { if (e.target.value !== String(f.component_c_litre_density_kg_per_l || "")) handleUpdateField(f.id, "componentCLitreDensityKgPerL", e.target.value); }}
+                                onBlur={(e) => { if (e.target.value !== String(f.component_c_litre_density_kg_per_l || "")) handleUpdateField(f.id, "component_c_litre_density_kg_per_l", e.target.value); }}
                                 className="w-24 border border-teal/30 rounded-md px-2 py-1.5 text-sm bg-white" />
                             ) : (
                               <span className="text-sm font-medium">{f.component_c_litre_density_kg_per_l || "Not set"}</span>

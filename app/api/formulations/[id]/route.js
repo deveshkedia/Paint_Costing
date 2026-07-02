@@ -58,26 +58,26 @@ export async function PUT(request, { params }) {
   const { id } = params;
   const body = await request.json();
   const {
-    customerName,
-    lossPct,
-    batchSizeLitres,
-    basePackingId,
-    hardenerPackingId,
-    componentCPackingId,
-    mixRatioWeightBase,
-    mixRatioWeightHard,
-    mixRatioWeightC,
-    mixRatioVolBase,
-    mixRatioVolHard,
-    mixRatioVolC,
-    litreDensityKgPerL,
-    baseLitreDensityKgPerL,
-    hardenerLitreDensityKgPerL,
-    componentCLitreDensityKgPerL,
+    customer_name: customerName,
+    loss_pct: lossPct,
+    batch_size_litres: batchSizeLitres,
+    base_packing_id: basePackingId,
+    hardener_packing_id: hardenerPackingId,
+    component_c_packing_id: componentCPackingId,
+    mix_ratio_weight_base: mixRatioWeightBase,
+    mix_ratio_weight_hard: mixRatioWeightHard,
+    mix_ratio_weight_c: mixRatioWeightC,
+    mix_ratio_vol_base: mixRatioVolBase,
+    mix_ratio_vol_hard: mixRatioVolHard,
+    mix_ratio_vol_c: mixRatioVolC,
+    litre_density_kg_per_l: litreDensityKgPerL,
+    base_litre_density_kg_per_l: baseLitreDensityKgPerL,
+    hardener_litre_density_kg_per_l: hardenerLitreDensityKgPerL,
+    component_c_litre_density_kg_per_l: componentCLitreDensityKgPerL,
     baseLines,
     hardenerLines,
     componentCLines,
-    isActive,
+    is_active: isActive,
   } = body;
 
   const pool = getPool();
@@ -96,10 +96,14 @@ export async function PUT(request, { params }) {
     const packType = existing.rows[0].pack_type;
     const isMultiPack = packType !== "single";
     const isThreePack = packType === "three_pack";
-    // Use the newly-provided batch size if given, else fall back to the existing one for line recalculation.
-    const effectiveBatchSize = batchSizeLitres !== undefined && batchSizeLitres !== null && batchSizeLitres !== ""
+
+    const oldBatchSize = existing.rows[0].batch_size_litres ? Number(existing.rows[0].batch_size_litres) : null;
+    const newBatchSize = batchSizeLitres !== undefined && batchSizeLitres !== null && batchSizeLitres !== ""
       ? Number(batchSizeLitres)
-      : existing.rows[0].batch_size_litres ? Number(existing.rows[0].batch_size_litres) : null;
+      : null;
+
+    // Use the newly-provided batch size if given, else fall back to the existing one for line recalculation.
+    const effectiveBatchSize = newBatchSize !== null ? newBatchSize : oldBatchSize;
 
     await client.query(
       `UPDATE formulations
@@ -143,6 +147,28 @@ export async function PUT(request, { params }) {
         id,
       ]
     );
+
+    // If batch size changed but no new lines provided, recalculate existing lines to maintain percentages
+    if (!Array.isArray(baseLines) && newBatchSize !== null && oldBatchSize !== null && newBatchSize !== oldBatchSize) {
+      const side = isMultiPack ? "base" : "single";
+      const scale = newBatchSize / oldBatchSize;
+      await client.query(
+        `UPDATE formulation_lines SET qty_kg = qty_kg * $1 WHERE formulation_id = $2 AND side = $3`,
+        [scale, id, side]
+      );
+      if (isMultiPack) {
+        await client.query(
+          `UPDATE formulation_lines SET qty_kg = qty_kg * $1 WHERE formulation_id = $2 AND side = 'hardener'`,
+          [scale, id]
+        );
+      }
+      if (isThreePack) {
+        await client.query(
+          `UPDATE formulation_lines SET qty_kg = qty_kg * $1 WHERE formulation_id = $2 AND side = 'component_c'`,
+          [scale, id]
+        );
+      }
+    }
 
     if (Array.isArray(baseLines)) {
       const side = isMultiPack ? "base" : "single";
