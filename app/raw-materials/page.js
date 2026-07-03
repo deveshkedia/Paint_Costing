@@ -95,10 +95,13 @@ export default function RawMaterialsPage() {
     if (!confirm("Remove this raw material? It will be hidden but kept for any formulations already using it.")) return;
     try {
       const res = await fetch(`/api/raw-materials/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Failed");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to delete");
+      setError("");
       load(search);
-    } catch {
-      setError("Could not remove this raw material.");
+    } catch (err) {
+      setError(`Could not remove raw material: ${err.message}`);
+      setTimeout(() => setError(""), 5000);
     }
   }
 
