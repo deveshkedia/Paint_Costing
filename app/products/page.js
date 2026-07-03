@@ -30,11 +30,20 @@ export default function ProductsPage() {
 
   async function load(searchTerm = "") {
     setLoading(true);
-    const url = searchTerm ? `/api/products?search=${encodeURIComponent(searchTerm)}` : "/api/products";
-    const res = await fetch(url);
-    const data = await res.json();
-    setProducts(data.products || []);
-    setLoading(false);
+    try {
+      const url = searchTerm ? `/api/products?search=${encodeURIComponent(searchTerm)}` : "/api/products";
+      const res = await fetch(url);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      setProducts(data.products || []);
+    } catch (err) {
+      setError(err.message || "Could not load products");
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
