@@ -17,13 +17,14 @@ export async function GET(request) {
     ? await query(
         `SELECT id, name, price_per_kg, density_kg_per_litre, supplier, notes, is_active, updated_at
          FROM raw_materials
-         WHERE name ILIKE $1
+         WHERE name ILIKE $1 AND is_active = true
          ORDER BY name ASC`,
         [`%${search}%`]
       )
     : await query(
         `SELECT id, name, price_per_kg, density_kg_per_litre, supplier, notes, is_active, updated_at
          FROM raw_materials
+         WHERE is_active = true
          ORDER BY name ASC`
       );
   return NextResponse.json({ rawMaterials: result.rows });
